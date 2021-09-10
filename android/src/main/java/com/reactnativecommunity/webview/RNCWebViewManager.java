@@ -201,6 +201,19 @@ public class RNCWebViewManager extends SimpleViewManager<WebView> {
 
     webView.setDownloadListener(new DownloadListener() {
       public void onDownloadStart(String url, String userAgent, String contentDisposition, String mimetype, long contentLength) {
+
+        // check unsupported urls
+        if (!url.startsWith("http")) {            
+          if (url.startsWith("blob")) {
+            Log.d("RNCWebViewManager", "Binary dowload from: " + url);
+            url = url.replace("blob:","");
+          } else {
+            // for other unsupported protocols, just do nothing and at least AVOID CRASH
+            Log.w("RNCWebViewManager", "Unsupported URL protocol: " + url);
+            return;
+          }
+        }
+
         webView.setIgnoreErrFailedForThisURL(url);
 
         RNCWebViewModule module = getModule(reactContext);
