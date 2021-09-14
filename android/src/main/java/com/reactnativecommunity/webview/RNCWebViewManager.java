@@ -216,6 +216,7 @@ public class RNCWebViewManager extends SimpleViewManager<WebView> {
                     "var xhr = new XMLHttpRequest();" +
                     "xhr.open('GET', '"+ url +"', true);" +
                     "xhr.setRequestHeader('Content-type','application/pdf');" +
+                    "xhr.responseType = 'blob';" +
                     "xhr.onload = function(e) {" +
                     "    if (this.status == 200) {" +
                     "        var blobPdf = this.response;" +
