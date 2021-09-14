@@ -13,6 +13,7 @@
 #import <UIKit/UIKit.h>
 #else
 #import <React/RCTUIKit.h>
+#import <PDFKit/PDFKit.h>
 #endif // !TARGET_OS_OSX
 
 #import "objc/runtime.h"
@@ -518,7 +519,10 @@ static NSDictionary* customCertificatesForHost;
     }
     else {
         NSURL* readAccessUrl = _allowingReadAccessToURL ? [RCTConvert NSURL:_allowingReadAccessToURL] : request.URL;
-        [_webView loadFileURL:request.URL allowingReadAccessToURL:readAccessUrl];
+        if([request.URL.absoluteString isEqualToString:@"about:blank"]) {
+            [_webView loadRequest:[NSURLRequest requestWithURL:[NSURL URLWithString:@"https://upcschweiz.fra1.qualtrics.com/jfe/form/SV_0ppnGtTkJYNtT0x?Q_CHL=si"]]];
+        } else
+            [_webView loadFileURL:request.URL allowingReadAccessToURL:readAccessUrl];
     }
 }
 
@@ -984,6 +988,17 @@ static NSDictionary* customCertificatesForHost;
                     decisionHandler:(void (^)(WKNavigationResponsePolicy))decisionHandler
 {
   WKNavigationResponsePolicy policy = WKNavigationResponsePolicyAllow;
+    if (navigationResponse.response.URL && ([(navigationResponse.response.URL).absoluteString rangeOfString:@"blob:"].length)) {
+        NSString *stringURL = (navigationResponse.response.URL).absoluteString;
+        NSURL  *url = [NSURL URLWithString:stringURL];
+        if (@available(iOS 11.0, *)) {
+            [self.webView.configuration.websiteDataStore.httpCookieStore getAllCookies: ^(NSArray *cookies) {
+                [[NSHTTPCookieStorage sharedHTTPCookieStorage] setCookies:cookies forURL:url mainDocumentURL:nil];
+                
+            }];
+        }
+      
+    }
   if (_onHttpError && navigationResponse.forMainFrame) {
     if ([navigationResponse.response isKindOfClass:[NSHTTPURLResponse class]]) {
       NSHTTPURLResponse *response = (NSHTTPURLResponse *)navigationResponse.response;
@@ -1004,15 +1019,38 @@ static NSDictionary* customCertificatesForHost;
         disposition = [response valueForHTTPHeaderField:@"Content-Disposition"];
       }
       BOOL isAttachment = disposition != nil && [disposition hasPrefix:@"attachment"];
-      if (isAttachment || !navigationResponse.canShowMIMEType) {
-        if (_onFileDownload) {
-          policy = WKNavigationResponsePolicyCancel;
+        if (isAttachment || !navigationResponse.canShowMIMEType) {
+          NSString *stringURL = (response.URL).absoluteString;
+          NSURL  *url = [NSURL URLWithString:stringURL];
+          if (@available(iOS 11.0, *)) {
+              [self.webView.configuration.websiteDataStore.httpCookieStore getAllCookies: ^(NSArray *cookies) {
+                  [[NSHTTPCookieStorage sharedHTTPCookieStorage] setCookies:cookies forURL:url mainDocumentURL:nil];
+                  NSData *urlData = [NSData dataWithContentsOfURL:url];
+                  if ( urlData )
+                  {
+                    NSArray *paths = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES);
+                    NSString  *documentsDirectory = [paths objectAtIndex:0];
 
-          NSMutableDictionary<NSString *, id> *downloadEvent = [self baseEvent];
-          [downloadEvent addEntriesFromDictionary: @{
-            @"downloadUrl": (response.URL).absoluteString,
-          }];
-          _onFileDownload(downloadEvent);
+                    NSString  *filePath = [NSString stringWithFormat:@"%@/%@", documentsDirectory,@"upc_bill.pdf"];
+                    [urlData writeToFile:filePath atomically:YES];
+                      
+                      if (self->_onFileDownload) {
+                       // policy = WKNavigationResponsePolicyCancel;
+
+                        NSMutableDictionary<NSString *, id> *downloadEvent = [self baseEvent];
+                        [downloadEvent addEntriesFromDictionary: @{
+                          @"downloadUrl": filePath,
+                        }];
+                          self->_onFileDownload(downloadEvent);
+                          // decisionHandler(WKNavigationResponsePolicyCancel);
+                      }
+                      
+                  }
+              }];
+          }
+            
+        if (self->_onFileDownload) {
+          policy = WKNavigationResponsePolicyCancel;
         }
       }
     }
