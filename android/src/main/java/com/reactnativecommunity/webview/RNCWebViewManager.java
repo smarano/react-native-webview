@@ -204,16 +204,45 @@ public class RNCWebViewManager extends SimpleViewManager<WebView> {
 
         // check unsupported urls
         if (!url.startsWith("http")) {            
-          if (url.startsWith("blob")) {
+          if (url.startsWith("blob") ) {
+          
+            Log.d("RNCWebViewManager", "-------------------------------------------");
             Log.d("RNCWebViewManager", "Binary dowload from: " + url);
-            url = url.replace("blob:","");
+            Log.d("RNCWebViewManager", "Content Disposition: " + contentDisposition);
+            Log.d("RNCWebViewManager", "Content mimetype: " + mimetype);
+            Log.d("RNCWebViewManager", "-------------------------------------------");
+          
+            String jscode =               
+                    "var xhr = new XMLHttpRequest();" +
+                    "xhr.open('GET', '"+ url +"', true);" +
+                    "xhr.setRequestHeader('Content-type','application/pdf');" +
+                    "xhr.onload = function(e) {" +
+                    "    if (this.status == 200) {" +
+                    "        var blobPdf = this.response;" +
+                    "        var reader = new FileReader();" +
+                    "        reader.readAsDataURL(blobPdf);" +
+                    "        reader.onloadend = function() {" +
+                    "            base64data = reader.result;" +
+                    "             window.ReactNativeWebView.postMessage( JSON.stringify( { "+
+                    "                    'action' : 'base64blob', "+
+                    "                    'base64data' : base64data}"+
+                    "                  ));"+
+                    "        }" +
+                    "    }" +
+                    "};" +
+                    "xhr.send();";
+                    Toast.makeText(webView.getContext(), "Downloading..." , Toast.LENGTH_LONG).show();    
+                    webView.evaluateJavascriptWithFallback(jscode);
+              return;
+
           } else {
             // for other unsupported protocols, just do nothing and at least AVOID CRASH
+            Toast.makeText(webView.getContext(), "File not supported" , Toast.LENGTH_SHORT).show();    
             Log.w("RNCWebViewManager", "Unsupported URL protocol: " + url);
             return;
           }
         }
-
+        
         webView.setIgnoreErrFailedForThisURL(url);
 
         RNCWebViewModule module = getModule(reactContext);
