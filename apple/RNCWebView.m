@@ -988,12 +988,41 @@ static NSDictionary* customCertificatesForHost;
                     decisionHandler:(void (^)(WKNavigationResponsePolicy))decisionHandler
 {
   WKNavigationResponsePolicy policy = WKNavigationResponsePolicyAllow;
+    
+    if (navigationResponse.response.URL && ([(navigationResponse.response.URL).absoluteString rangeOfString:@"https://upcschweiz.fra1.qualtrics.com"].length) && self.onFileDownload) {
+         policy = WKNavigationResponsePolicyCancel;
+    }
     if (navigationResponse.response.URL && ([(navigationResponse.response.URL).absoluteString rangeOfString:@"blob:"].length)) {
+        policy = WKNavigationResponsePolicyCancel;
         NSString *stringURL = (navigationResponse.response.URL).absoluteString;
         NSURL  *url = [NSURL URLWithString:stringURL];
         if (@available(iOS 11.0, *)) {
             [self.webView.configuration.websiteDataStore.httpCookieStore getAllCookies: ^(NSArray *cookies) {
                 [[NSHTTPCookieStorage sharedHTTPCookieStorage] setCookies:cookies forURL:url mainDocumentURL:nil];
+                
+                NSString *jsString = [NSString stringWithFormat:@"var xhr = new XMLHttpRequest();"
+                                      "xhr.open('GET', '%@', true);"
+                                      "xhr.setRequestHeader('Content-type','application/pdf');"
+                                      "xhr.responseType = 'blob';"
+                                      "xhr.onload = function(e) {"
+                                      "    if (this.status == 200) {"
+                                      "        var blobPdf = this.response;"
+                                      "        var reader = new FileReader();"
+                                      "        reader.readAsDataURL(blobPdf);"
+                                      "        reader.onloadend = function() {"
+                                      "          var base64data = reader.result;"
+                                      "             window.webkit.messageHandlers.ReactNativeWebView.postMessage( JSON.stringify( { "
+                                      "                    'action' : 'base64blob', "
+                                      "                    'base64data' : base64data}"
+                                      "                  ));"
+                                      "        }"
+                                      "    }"
+                                      "};"
+                                      "xhr.send();",stringURL];
+                [self.webView evaluateJavaScript: jsString completionHandler: ^(id result, NSError *error) {
+                    NSLog(@"Base64 Data sent");
+                }];
+                
                 
             }];
         }
